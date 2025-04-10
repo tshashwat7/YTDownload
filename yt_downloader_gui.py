@@ -12,7 +12,7 @@ class DownloaderApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Media Downloader - Modern UI")
-        self.root.geometry("750x400")
+        self.root.geometry("750x450")
         self.style = tb.Style("flatly")
 
         self.platform = tk.StringVar(value="YouTube")
@@ -60,11 +60,14 @@ class DownloaderApp:
 
         ttk.Button(frame, text="Download", bootstyle='success', command=self.start_download).grid(row=4, column=1, pady=20)
 
-        self.progress = ttk.Progressbar(frame, length=500, mode='determinate')
+        self.progress = ttk.Progressbar(frame, length=500, mode='indeterminate')
         self.progress.grid(row=5, column=0, columnspan=3, pady=5)
 
         self.status_label = ttk.Label(frame, text="Ready")
         self.status_label.grid(row=6, column=0, columnspan=3)
+
+        self.error_box = tk.Text(frame, height=4, wrap='word', state='disabled', bg='#f8f9fa')
+        self.error_box.grid(row=7, column=0, columnspan=3, pady=(10, 0), sticky='nsew')
 
         self.update_visibility()
         self.platform.trace_add('write', lambda *args: self.update_visibility())
@@ -88,6 +91,8 @@ class DownloaderApp:
         self.audio_chk.configure(state='normal' if is_youtube else 'disabled')
 
     def start_download(self):
+        self.progress.start()
+        self.status_label.config(text="Starting download...")
         threading.Thread(target=self.download).start()
 
     def get_video_count(self, url):
@@ -106,12 +111,8 @@ class DownloaderApp:
         platform = self.platform.get()
 
         if not url or not folder:
-            messagebox.showerror("Error", "URL and Download Path are required")
+            self.show_error("URL and Download Path are required")
             return
-
-        total_videos = self.get_video_count(url) if platform == "YouTube" else 1
-        self.progress["maximum"] = total_videos
-        self.progress["value"] = 0
 
         profile_name_match = re.search(r"(?:youtube\\.com|twitter\\.com)/(?:c/|user/|channel/|@)?([\w\\-\.]+)", url)
         profile_name = profile_name_match.group(1) if profile_name_match else "media"
@@ -131,22 +132,26 @@ class DownloaderApp:
             else:
                 cmd += ["-f", "bestvideo+bestaudio"]
 
-        current_video = 0
         try:
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             for line in process.stdout:
                 if "Destination:" in line:
-                    current_video += 1
-                    self.progress["value"] = current_video
-                    self.status_label.config(text=f"Downloading {current_video} of {total_videos}")
+                    self.status_label.config(text="Downloading...")
                 self.root.update()
+            self.progress.stop()
+            self.status_label.config(text="Download complete.")
+            messagebox.showinfo("Success", "Download completed successfully.")
         except Exception as e:
-            messagebox.showerror("Error", str(e))
-            return
+            self.progress.stop()
+            self.show_error(str(e))
 
-        self.progress["value"] = total_videos
-        self.status_label.config(text="Download complete.")
-        messagebox.showinfo("Success", "Download completed successfully.")
+    def show_error(self, msg):
+        self.status_label.config(text="Error occurred.")
+        self.error_box.config(state='normal')
+        self.error_box.delete("1.0", tk.END)
+        self.error_box.insert(tk.END, msg)
+        self.error_box.config(state='disabled')
+        messagebox.showerror("Error", msg)
 
 if __name__ == "__main__":
     root = tb.Window(themename="flatly")
